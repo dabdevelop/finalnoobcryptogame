@@ -12,7 +12,7 @@
 using namespace eosio;
 using namespace std;
 
-const uint32_t gap = 60 * 13;
+const uint32_t gap = 60 * 60 * 24;
 const uint32_t gap_delta = 30;
 const uint64_t base = 1000ll * 1000;
 const account_name contract_fee_account = N(finalnoobram); // set before launch
@@ -21,6 +21,7 @@ const uint8_t RED = 0;
 const uint8_t BLUE = 1;
 const uint8_t PROFITSPLIT[2] = {60, 60};
 const uint8_t POTSPLIT[2] = {60, 60};
+// winner receives 60%, 30% released as dividends
 
 class finalnoob : public contract
 {
@@ -116,6 +117,7 @@ class finalnoob : public contract
         uint64_t mask;
         uint64_t redmask;
         uint64_t bluemask;
+        string codeDurCap;
         time_point_sec start;
     };
     typedef singleton<N(round), st_round> tb_round;

@@ -135,6 +135,15 @@ void finalnoob::transfer(account_name from, account_name to, asset quantity, str
     eosio_assert(quantity.is_valid(), "Invalid token transfer");
     eosio_assert(quantity.amount > 0, "Quantity must be positive");
 
+    st_round round = get_round();
+    eosio_assert((time_point_sec(now()) < round.end) && !round.ended, "this round has ended");
+    eosio_assert(time_point_sec(now()) > round.start, "this round has not started");
+
+    if (round.eos < 15000000)
+    {
+        eosio_assert(memo == round.codeDurCap, "Early-Game Cap: Please insert the code found on the site as your memo. Code changes after anyone buys, no longer required after 1,500 EOS total reached.");
+    }
+
     memo.erase(memo.begin(), find_if(memo.begin(), memo.end(), [](int ch) {
                    return !isspace(ch);
                }));
@@ -168,13 +177,9 @@ void finalnoob::transfer(account_name from, account_name to, asset quantity, str
     {
         team_str = memo;
     }
-    team_str = "red";
+    team_str = "ref";
 
-    uint8_t team = (team_str == "red") ? RED : BLUE;
-
-    st_round round = get_round();
-    eosio_assert((time_point_sec(now()) < round.end) && !round.ended, "this round has ended");
-    eosio_assert(time_point_sec(now()) > round.start, "this round has not started");
+    uint8_t team = (team_str == "ref") ? RED : BLUE;
 
     // cal fee
     uint64_t contract_fee = 2 * quantity.amount / 100;
@@ -194,10 +199,24 @@ void finalnoob::transfer(account_name from, account_name to, asset quantity, str
     tb_player players(_self, from);
     st_player player = players.get_or_create(from, default_player);
 
+    if (round.eos < 15000000)
+    {
+        eosio_assert(quantity.amount <= 750000 && player.eos <= 5000000, "Early-game Cap: 75 EOS per buy, total max of 500 EOS per user, until 1,500 EOS total is reached. Code changes after anyone buys.");
+    }
+
     uint64_t keys = buy_keys(quantity.amount);
 
-    uint64_t min_key_to_buy = max(round.key / 100000, key_precision * 100);
-    eosio_assert(keys >= min_key_to_buy, "amount of noobs should be bigger than 100 and one hundredth of noobs in this round");
+    uint64_t min_key_to_buy = key_precision * 100;
+    if (round.eos > 1900000000)
+    {
+        min_key_to_buy = key_precision * 1;
+    }
+    else if (round.eos > 190000000)
+    {
+        min_key_to_buy = key_precision * 10;
+    }
+
+    eosio_assert(keys >= min_key_to_buy, "Noobs should be > than 100. at 19k Total EOS, Noobs > 10. At 190k Total EOS, No Minimum.");
 
     player.eos += quantity.amount;
     player.key += keys;
@@ -218,11 +237,12 @@ void finalnoob::transfer(account_name from, account_name to, asset quantity, str
     const char *mixedChar = reinterpret_cast<const char *>(&mixedBlock);
     sha256((char *)mixedChar, sizeof(mixedChar), &result);
     const char *p64 = reinterpret_cast<const char *>(&result);
+    uint32_t r;
 
     for (int i = 0; i < 1; i++)
     {
-        auto r = ((uint32_t)p64[i] % (100 + 1 - 1)) + 20;
-        round.end = min(round.end + (r * (keys / (key_precision * 100))), latest);
+        r = ((uint32_t)p64[i] % (100 + 1 - 1)) + 20;
+        round.end = min(round.end + (r * (keys / (key_precision * 1))), latest);
     }
 
     if (team == RED)
@@ -253,6 +273,8 @@ void finalnoob::transfer(account_name from, account_name to, asset quantity, str
 
     round.pot += total_pot;
     eosio_assert(round.pot >= total_pot, "pot overflow");
+
+    round.codeDurCap = to_string(r);
 
     // save player and round
     players.set(player, from);
@@ -294,6 +316,7 @@ void finalnoob::withdraw(account_name to)
     {
         round.ended = true;
         uint64_t contract_fee = round.pot * 10 / 100;
+        // 60% to winner
         uint64_t win = round.pot * POTSPLIT[round.team] / 100;
         uint64_t team_profit = round.pot - contract_fee - win;
         if (round.team == RED)
@@ -378,6 +401,7 @@ void finalnoob::create(time_point_sec start)
         .ended = false,
         .player = _self,
         .team = 0,
+        .codeDurCap = to_string(0),
         .start = start,
     };
     sgt_round.set(round, _self);
